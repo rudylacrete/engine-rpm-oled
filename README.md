@@ -1,6 +1,7 @@
 # Abstract
 
 This simple project use an atmega328 to interact with an ELM327 through UART and display basic informations on an OLED screen (SSD1306).
+Part of this code to draw the RPM gauge comes from [Timbarbour instructable](https://www.instructables.com/id/Add-an-Arduino-based-Optical-Tachometer-to-a-CNC-R/).
 
 # Wiring
 

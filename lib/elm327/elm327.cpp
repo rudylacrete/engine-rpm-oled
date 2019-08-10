@@ -1,166 +1,115 @@
 /*
-  ELM327.cpp - Library communicating with an ELM327 device over serial
-  Created by Evan d'Entremont, March 2016
+This source code is inspired from the following:
+http://www.kokoras.com/OBD/Arduino_HC-05_ELM327_OBD_RPM_Shift_Light.htm
 */
-
-#include "Arduino.h"
+#include <Arduino.h>
 #include "elm327.h"
 
+bool ObdReader::setup() {
+  pinMode(config.rxPin, INPUT);
+  pinMode(config.txPin, OUTPUT);
 
-ELM327::ELM327(SoftwareSerial& serial):_SoftSerial(serial)
-{
-  String result;
+  serial = new SoftwareSerial(config.rxPin, config.txPin);
+  serial->begin(BAUDRATE);
 
-  _SoftSerial.begin(38400);
-  delay(DELAYLENGTH);
+  return obd_init();
+}
 
-  result = query("ATI");
+bool ObdReader::send_OBD_cmd(const char* obd_cmd) {
+  String result="";
+  char recvChar;
+  boolean prompt;
+  int retries;
+
+  prompt = false;
+  retries = 0;
+  while((!prompt) && (retries < OBD_CMD_RETRIES)) {                //while no prompt and not reached OBD cmd retries
+    Serial.print("Sending command ");
+    Serial.println(obd_cmd);
+    serial->print(obd_cmd);                             //send OBD cmd
+    serial->print("\r");                                //send cariage return
+
+    while (serial->available() <= 0);                   //wait while no data from ELM
+
+    while ((serial->available()>0) && (!prompt)){       //while there is data and not prompt
+      recvChar = serial->read();                        //read from elm
+      result += recvChar;
+      if (recvChar == 62) {
+        prompt = true;                            //if received char is '>' then prompt is true
+      }
+    }
+    if(!prompt) {
+      retries++;                                          //increase retries
+      delay(2000);
+    }
+  }
+  Serial.print("Response: ");
   Serial.println(result);
-
-  // Should abstract this.
-  if (result.substring(1,7)=="ELM327"){
-    // Great. We're connected.
-  }
-  else{
-    delay(DELAYLENGTH);
-    // This really ought to return on failure.
-  }
+  return prompt;
 }
 
-// This is a wrapper around querying the device and
-// processing the result.
-String ELM327::get(String command){
-  return process(command, query(command));
+bool ObdReader::obd_init() {
+  bool res = false;
+
+  res = send_OBD_cmd("ATZ");      //send to OBD ATZ, reset
+  if(!res) return res;
+  delay(1000);
+
+  res = send_OBD_cmd("ATE0");      //send to OBD ATE0, echo off
+  if(!res) return res;
+  delay(1000);
+
+  res = send_OBD_cmd("ATSP0");    //send ATSP0, protocol auto
+  if(!res) return res;
+  delay(1000);
+
+  res = send_OBD_cmd("0100");     //send 0100, retrieve available pid's 00-19
+  if(!res) return res;
+  delay(1000);
+
+  res = send_OBD_cmd("0120");     //send 0120, retrieve available pid's 20-39
+  if(!res) return res;
+  delay(1000);
+
+  res = send_OBD_cmd("0140");     //send 0140, retrieve available pid's 40-??
+  if(!res) return res;
+  delay(1000);
+
+  return res;
 }
 
-String ELM327::query(String command){
-  String inString="";
-  byte inData=0;
-  char inChar=0;
-  bool spinlock = true;
-  unsigned long time;
-  Serial.println(command);
-  _SoftSerial.println(command);
+int ObdReader::getRpm() {
+  boolean prompt = false, valid = false;
+  char recvChar;
+  char bufin[15] = { '\0' };
+  int i = 0, rpm = 0;
 
-  time = millis();
+  serial->print("010C1");                        //send to OBD PID command 010C is for RPM, the last 1 is for ELM to wait just for 1 respond (see ELM datasheet)
+  serial->print("\r");                           //send to OBD cariage return char
+  while (serial->available() <= 0);              //wait while no data from ELM
 
-  // Spinlock's are perfectly valid :D
-  while(spinlock){
-    if(millis() > (time + 4000)){
-      // TODO: Handle this condition in process();
-      return "Timeout";
+  while ((serial->available()>0) && (!prompt)){  //if there is data from ELM and prompt is false
+    recvChar = serial->read();                   //read from ELM
+    if ((i < 15) && (!(recvChar == 32 || recvChar == 62 || recvChar == '\r'))) {                     //the normal respond to previus command is 010C1/r41 0C ?? ??>, so count 15 chars and ignore char 32 which is space
+      bufin[i] = recvChar;                                 //put received char in bufin array
+      i++;                                             //increase i
     }
-    else if(_SoftSerial.available()){
-      spinlock = false;
-    }
-  }
-  while(_SoftSerial.available() > 0){
-    inData = 0;
-    inChar = 0;
-    byte inData = _SoftSerial.read();
-    char inChar = char(inData);
-    inString = inString + inChar;
+    if (recvChar == 62) prompt = true;                       //if received char is 62 which is '>' then prompt is true, which means that ELM response is finished
   }
 
-  inString.replace(command,"");
-  inString.replace(">","");
-  inString.replace("OK","");
-
-  // Some of these look like errors that ought to be handled..
-  inString.replace("STOPPED","");
-  inString.replace("SEARCHING","");
-  inString.replace("NO DATA","");
-  inString.replace("?","");
-  inString.replace(",","");
-
-  return inString;
-}
-
-// TODO move this into it's own class, PID's arent inherently ELM327 related.
-// Should be removing spaces and removing the first 4 characters first. 
-// the 41 0C for example.. is the CAN bus ID
-String ELM327::process(String command, String result){
-
-  long DisplayValue;
-  int ByteCount=0;
-  long A;
-  int B;
-  String WorkingString="";
-
-  //Check which OBD Command was sent and calculate VALUE
-  //Calculate RPM I.E Returned bytes wil be 41 0C 1B E0
-  if (command == PID_RPM){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    WorkingString = result.substring(11,13);
-    B = strtol(WorkingString.c_str(),NULL,0);
-
-   DisplayValue = ((A * 256)+B)/4;
-   return String(DisplayValue) + " rpm";
+  valid = ((bufin[0] == '4') && (bufin[1] == '1') && (bufin[2] == '0') && (bufin[3] == 'C')); //if first four chars after our command is 410C
+  if (valid){                                                                    //in case of correct RPM response
+    char hexByte[2];
+    int A, B;
+    //start calculation of real RPM value
+    //RPM is coming from OBD in two 8bit(bytes) hex numbers for example A=0B and B=6C
+    //the equation is ((A * 256) + B) / 4, so 0B=11 and 6C=108
+    //so rpm=((11 * 256) + 108) / 4 = 731 a normal idle car engine rpm
+    memcpy(hexByte, bufin + 4, 2);
+    A = strtol(hexByte, NULL, 16);
+    memcpy(hexByte, bufin + 6, 2);
+    B = strtol(hexByte, NULL, 16);
+    rpm = ((A * 256) + B) / 4;
   }
-
-  //Calculate Vehicle speed
-  // I.E Returned bytes wil be 41 0C 1B E0
-  else if (command == PID_SPEED){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " km/h";
-  }
-
-  //Coolant Temp
-  else if (command == PID_COOLANT_TEMP){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " C";
-  }
-
-  //IAT Temp
-  else if (command == PID_IAT_TEMP){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " C";
-  }
-
-  //Air flow Rate
-  else if (command == PID_AIR_FLOW_RATE){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    WorkingString = result.substring(11,13);
-    B = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = ((A * 256)+B)/100;
-    return String(DisplayValue) + " g/s";
-  }
-
-  //Ambient Temp
-  else if (command == PID_AMBIENT_TEMP){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " C";
-  }
-
-  //Throttle position
-  else if (command == PID_THROTTLE){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " %";
-  }
-
-  //Barometric pressure
-  else if (command == PID_BAROMETRIC_PRESSURE){
-    WorkingString = result.substring(7,9);
-    A = strtol(WorkingString.c_str(),NULL,0);
-    DisplayValue = A;
-    return String(DisplayValue) + " kpa";
-  }
-
-  else{
-    return "Not Implemented";
-  }
-
-
+  return rpm;
 }

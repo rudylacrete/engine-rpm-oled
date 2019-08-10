@@ -87,7 +87,6 @@
 #define PID_FUEL_TYPE                                                "01 51" // From fuel type table see below
 #define PID_ETHANOL_FUEL_PERCENTAGE                                  "01 52" // A*100/255
 #define PID_ABSOLUTE_EVAP_SYSTEM_VAPOR_PRESSURE                      "01 53" // ((A*256)+B)/200
-#define PID_EVAP_SYSTEM_VAPOR_PRESSURE                               "01 54" // ((A*256)+B)-32767
 #define PID_SHORTTERM_SECONDARY_OXYGEN_SENSOR_TRIM_BANK_1_AND_BANK_3 "01 55" // (A-128)*100/128 (B-128)*100/128
 #define PID_LONGTERM_SECONDARY_OXYGEN_SENSOR_TRIM_BANK_1_AND_BANK_3  "01 56" // (A-128)*100/128 (B-128)*100/128
 #define PID_SHORTTERM_SECONDARY_OXYGEN_SENSOR_TRIM_BANK_2_AND_BANK_4 "01 57" // (A-128)*100/128 (B-128)*100/128
@@ -120,19 +119,16 @@
 #define PID_EXHAUST_PRESSURE                                         "01 73" //
 #define PID_TURBOCHARGER_RPM                                         "01 74" //
 #define PID_TURBOCHARGER_TEMP                                        "01 75" //
-#define PID_TURBOCHARGER_TEMP                                        "01 76" //
 #define PID_CHARGE_AIR_COOLER_TEMP                                   "01 77" //
 #define PID_EXHAUST_GAS_TEMP_BANK_1                                  "01 78" // Special PID. See below
 #define PID_EXHAUST_GAS_TEMP_BANK_2                                  "01 79" // Special PID. See below
 #define PID_DIESEL_PARTICULATE_FILTER                                "01 7A" //
-#define PID_DIESEL_PARTICULATE_FILTER                                "01 7B" //
 #define PID_DIESEL_PARTICULATE_FILTER_TEMP                           "01 7C" //
 #define PID_NOX_NTE_CONTROL_AREA_STATUS                              "01 7D" //
 #define PID_PM_NTE_CONTROL_AREA_STATUS                               "01 7E" //
 #define PID_ENGINE_RUN_TIME                                          "01 7F" //
 
 #define PID_ENGINE_RUN_TIME_FOR_AUXILIARY_EMISSIONS_CONTROL_DEVICE   "01 81" //
-#define PID_ENGINE_RUN_TIME_FOR_AUXILIARY_EMISSIONS_CONTROL_DEVICE   "01 82" //
 #define PID_NOX_SENSOR                                               "01 83" //
 #define PID_MANIFOLD_SURFACE_TEMP                                    "01 84" //
 #define PID_NOX_REAGENT_SYSTEM                                       "01 85" //

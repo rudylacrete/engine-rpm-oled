@@ -46,21 +46,34 @@ void drawCoolantTemp(int);
 
 
 Adafruit_SSD1306 disp(4);
+SoftwareSerial serial(8, 9);
+ObdReader elm({
+  .rxPin = 8,
+  .txPin = 9
+});
 
 void setup() {
+  Serial.begin(9600);
   disp.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  elm.setup();
   disp.clearDisplay();
+  Serial.println("Setup done");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  for(int i = 0;;i++) {
+  delay(80);
+  int rpm = elm.getRpm();
+  if(rpm != 0) {
+    // Serial.println("Get RPM");
+    // Serial.println(rpm);
     disp.clearDisplay();
-    drawRpm((i%(DIAL_MAX_RPM/ONE_K)) * ONE_K);
+    drawRpm(rpm);
     drawCoolantTemp(110);
     disp.display();
-    delay(50);
   }
+  // for(int i = 0;;i++) {
+  //   delay(50);
+  // }
 }
 
 void drawRpm(long rpm) {

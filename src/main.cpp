@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
 #include "elm327.h"
 #include <Wire.h>
 #include <math.h>
@@ -7,82 +6,92 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-const int OLED_HEIGHT = 64;
-const int OLED_WIDTH = 128;
+/*
+This program is short to run on atmega328 because of the big memory footprint
+of adafruit ssd lib. If the program takes more than 93% of RAM at compilation, there
+is a lot of chances that the software will bug (restart, freeze, etc)
+because it's running out of space for dynamic mem allocation.
+To deal with that, I've used PROGMEM instruction whenever possible (readonly var)
+to put things into flash and save RAM. I'm also using the string helper F() which
+does the same for static strings.
+*/
 
-const int SEGMENT_HEIGHT = 16;
-const int TEXT_SIZE_SMALL = 1;
-const int TEXT_SIZE_LARGE = 2;
-const int ONE_K = 100;
+const int OLED_HEIGHT PROGMEM = 64;
+const int OLED_WIDTH PROGMEM = 128;
 
-const uint16_t DIAL_CENTER_X = OLED_WIDTH / 2;
-const uint16_t DIAL_RADIUS = (OLED_HEIGHT - SEGMENT_HEIGHT) - 1;
-const uint16_t DIAL_CENTER_Y = OLED_HEIGHT - 1;
-const uint16_t INDICATOR_LENGTH = DIAL_RADIUS - 5;
-const uint16_t INDICATOR_WIDTH = 5;
-const uint16_t LABEL_RADIUS = DIAL_RADIUS - 18;
-const int DIAL_LABEL_Y_OFFSET = 6;
-const int DIAL_LABEL_X_OFFSET = 4;
+const int SEGMENT_HEIGHT PROGMEM = 16;
+const int TEXT_SIZE_SMALL PROGMEM = 1;
+const int TEXT_SIZE_LARGE PROGMEM = 2;
+const int ONE_K PROGMEM = 100;
 
-const long MAJOR_TICKS[] = { 0, 1000, 2000, 3000, 4000, 5000 };
-const int MAJOR_TICK_COUNT = sizeof(MAJOR_TICKS) / sizeof(MAJOR_TICKS[0]);
-const int MAJOR_TICK_LENGTH = 11;
-const long MINOR_TICKS[] = { 500, 1500, 2500, 3500, 4500 };
-const int MINOR_TICK_COUNT = sizeof(MINOR_TICKS) / sizeof(MINOR_TICKS[0]);
-const int MINOR_TICK_LENGTH = 5;
+const uint16_t DIAL_CENTER_X PROGMEM = OLED_WIDTH / 2;
+const uint16_t DIAL_RADIUS PROGMEM = (OLED_HEIGHT - SEGMENT_HEIGHT) - 1;
+const uint16_t DIAL_CENTER_Y PROGMEM = OLED_HEIGHT - 1;
+const uint16_t INDICATOR_LENGTH PROGMEM = DIAL_RADIUS - 5;
+const uint16_t INDICATOR_WIDTH PROGMEM = 5;
+const uint16_t LABEL_RADIUS PROGMEM = DIAL_RADIUS - 18;
+const int DIAL_LABEL_Y_OFFSET PROGMEM = 6;
+const int DIAL_LABEL_X_OFFSET PROGMEM = 4;
 
-const uint16_t DIAL_MAX_RPM = MAJOR_TICKS[MAJOR_TICK_COUNT-1];
-const int HALF_CIRCLE_DEGREES = 180;
-const float PI_RADIANS = PI/HALF_CIRCLE_DEGREES;
+const uint16_t MAJOR_TICKS[] PROGMEM= { 0, 1000, 2000, 3000, 4000, 5000 };
+const int MAJOR_TICK_COUNT PROGMEM = sizeof(MAJOR_TICKS) / sizeof(MAJOR_TICKS[0]);
+const int MAJOR_TICK_LENGTH PROGMEM = 11;
+const uint16_t MINOR_TICKS[] PROGMEM = { 500, 1500, 2500, 3500, 4500 };
+const int MINOR_TICK_COUNT PROGMEM = sizeof(MINOR_TICKS) / sizeof(MINOR_TICKS[0]);
+const int MINOR_TICK_LENGTH PROGMEM = 5;
 
-void drawTicks(const long*, int, int);
-float getPercentMaxRpm(long);
+const uint16_t DIAL_MAX_RPM PROGMEM = MAJOR_TICKS[MAJOR_TICK_COUNT-1];
+const uint8_t HALF_CIRCLE_DEGREES PROGMEM = 180;
+const float PI_RADIANS PROGMEM = PI/HALF_CIRCLE_DEGREES;
+
+void drawTicks(const uint16_t*, int, int);
+float getPercentMaxRpm(int);
 float getCircleXWithLengthAndAngle(uint16_t, float);
 float getCircleYWithLengthAndAngle(uint16_t, float);
 void drawMajorTickLabels(void);
-void drawIndicatorHand(long);
-void drawRpm(long);
+void drawIndicatorHand(int);
+void drawRpm(int);
 void drawCoolantTemp(int);
-void displayInfo(const char*);
+void displayInfo(const __FlashStringHelper*);
 
+static bool initialized = false;
 
 Adafruit_SSD1306 disp(4);
 ObdReader elm({
   .rxPin = 8,
   .txPin = 9
 });
+static int rpm = 0;
 
 void setup() {
   Serial.begin(9600);
   disp.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  disp.clearDisplay();
-  disp.setCursor(0, 0);
-  disp.setTextSize(TEXT_SIZE_LARGE);
-  disp.setTextColor(WHITE);
-  displayInfo("Setting up");
-  elm.setup();
-  displayInfo("Setup done");
-  Serial.println("Setup done");
+  // F() is an helper used to store string into flash instead of RAM
+  displayInfo(F("Setting up"));
+  initialized = elm.setup();
+  if(initialized == false) {
+    displayInfo(F("Init KO"));
+    delay(2000);
+    exit(1);
+  }
+  displayInfo(F("Setup done"));
+  Serial.println(F("Setup done"));
   delay(1000);
 }
 
 void loop() {
+  Serial.println(F("Main loop"));
   delay(80);
-  int rpm = elm.getRpm();
+  rpm = elm.getRpm();
   if(rpm != 0) {
-    // Serial.println("Get RPM");
-    // Serial.println(rpm);
     disp.clearDisplay();
     drawRpm(rpm);
     drawCoolantTemp(110);
     disp.display();
   }
-  // for(int i = 0;;i++) {
-  //   delay(50);
-  // }
 }
 
-void displayInfo(const char* text) {
+void displayInfo(const __FlashStringHelper* text) {
   disp.clearDisplay();
   disp.setCursor(0, OLED_HEIGHT/2);
   disp.setTextSize(TEXT_SIZE_LARGE);
@@ -91,7 +100,7 @@ void displayInfo(const char* text) {
   disp.display();
 }
 
-void drawRpm(long rpm) {
+void drawRpm(int rpm) {
   disp.drawCircle(DIAL_CENTER_X, DIAL_CENTER_Y, DIAL_RADIUS, WHITE);
   drawTicks(MAJOR_TICKS, MAJOR_TICK_COUNT, MAJOR_TICK_LENGTH);
   drawTicks(MINOR_TICKS, MINOR_TICK_COUNT, MINOR_TICK_LENGTH);
@@ -99,9 +108,10 @@ void drawRpm(long rpm) {
   drawIndicatorHand(rpm);
 }
 
-void drawTicks(const long ticks[], int tick_count, int tick_length) {
+void drawTicks(const uint16_t ticks[], int tick_count, int tick_length) {
   for (int tick_index = 0; tick_index < tick_count; tick_index++) {
-		long rpm_tick_value = ticks[tick_index];
+    // this array is stored in flash so need to use pgm_read_word to get value
+		int rpm_tick_value = (int)pgm_read_word(ticks + tick_index);
 		float tick_angle = (HALF_CIRCLE_DEGREES * getPercentMaxRpm(rpm_tick_value)) + HALF_CIRCLE_DEGREES;
 		uint16_t dial_x = getCircleXWithLengthAndAngle(DIAL_RADIUS - 1, tick_angle);
 		uint16_t dial_y = getCircleYWithLengthAndAngle(DIAL_RADIUS - 1, tick_angle);
@@ -111,7 +121,7 @@ void drawTicks(const long ticks[], int tick_count, int tick_length) {
 	}
 }
 
-float getPercentMaxRpm(long value) {
+float getPercentMaxRpm(int value) {
 	float ret_value = (value * 1.0)/(DIAL_MAX_RPM * 1.0);
 	return ret_value;
 }
@@ -130,7 +140,8 @@ void drawMajorTickLabels() {
 	for (int label_index = 0; label_index < MAJOR_TICK_COUNT; label_index++) {
     // draw only half labels
     if(label_index% 2==0) continue;
-		long rpm_tick_value = MAJOR_TICKS[label_index];
+    // this array is stored in flash so need to use pgm_read_word to get value
+		int rpm_tick_value = pgm_read_word(MAJOR_TICKS + label_index);
 		float tick_angle = (HALF_CIRCLE_DEGREES	* getPercentMaxRpm(rpm_tick_value)) + HALF_CIRCLE_DEGREES;
 		uint16_t dial_x = getCircleXWithLengthAndAngle(LABEL_RADIUS, tick_angle);
 		uint16_t dial_y = getCircleYWithLengthAndAngle(LABEL_RADIUS, tick_angle);
@@ -140,7 +151,7 @@ void drawMajorTickLabels() {
 	}
 }
 
-void drawIndicatorHand(long rpm_value) {
+void drawIndicatorHand(int rpm_value) {
   float indicator_angle = (HALF_CIRCLE_DEGREES * getPercentMaxRpm(rpm_value)) + HALF_CIRCLE_DEGREES;
   uint16_t indicator_top_x = getCircleXWithLengthAndAngle(INDICATOR_LENGTH, indicator_angle);
   uint16_t indicator_top_y = getCircleYWithLengthAndAngle(INDICATOR_LENGTH, indicator_angle);
@@ -157,7 +168,7 @@ void drawCoolantTemp(int temp) {
   disp.setCursor(0, 0);
 
   disp.setTextSize(TEXT_SIZE_LARGE);
-  disp.print("TEMP: ");
+  disp.print(F("TEMP: "));
   disp.setTextSize(TEXT_SIZE_SMALL);
   disp.print(temp);
   disp.drawCircle(86 + (temp > 100 ? 7 : 0), 2, 1, WHITE);

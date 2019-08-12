@@ -17,6 +17,8 @@ typedef enum {
 class ObdReader{
   public:
     ObdReader(obd_reader_conf_t config): config(config) {};
+    char* resBuf;
+    uint8_t resLength;
     bool setup();
     int getRpm();
   private:
@@ -25,5 +27,6 @@ class ObdReader{
     obd_reader_conf_t config;
     char* send_OBD_cmd(const char* obd_cmd);
     bool obd_init();
+    void replaceStrChar(char currentChr, char newChr);
 };
 #endif

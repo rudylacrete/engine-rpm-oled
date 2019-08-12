@@ -8,8 +8,8 @@ http://www.kokoras.com/OBD/Arduino_HC-05_ELM327_OBD_RPM_Shift_Light.htm
 void printHex(const char*, uint8_t);
 
 bool ObdReader::setup() {
-  // pinMode(config.rxPin, INPUT);
-  // pinMode(config.txPin, OUTPUT);
+  pinMode(config.rxPin, INPUT);
+  pinMode(config.txPin, OUTPUT);
 
   serial = new SoftwareSerial(config.rxPin, config.txPin);
   serial->begin(BAUDRATE);
@@ -38,7 +38,7 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
       if(millis() > (time + 4000)){
         break;
       }
-      else if(serial->available()){
+      else if(serial->available()>0){
         spinlock = false;
       }
     }
@@ -52,7 +52,7 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
     }
 
     Serial.println("Spinlock ok");
-    while (serial->available() && (!prompt)) {       //while there is data and not prompt
+    while ((serial->available()>0) && (!prompt)) {       //while there is data and not prompt
       recvChar = serial->read();                        //read from elm
       if (recvChar == 62) {
         prompt = true;                            //if received char is '>' then prompt is true

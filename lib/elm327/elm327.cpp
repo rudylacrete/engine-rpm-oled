@@ -5,9 +5,11 @@ http://www.kokoras.com/OBD/Arduino_HC-05_ELM327_OBD_RPM_Shift_Light.htm
 #include <Arduino.h>
 #include "elm327.h"
 
+void printHex(const char*, uint8_t);
+
 bool ObdReader::setup() {
-  pinMode(config.rxPin, INPUT);
-  pinMode(config.txPin, OUTPUT);
+  // pinMode(config.rxPin, INPUT);
+  // pinMode(config.txPin, OUTPUT);
 
   serial = new SoftwareSerial(config.rxPin, config.txPin);
   serial->begin(BAUDRATE);
@@ -15,49 +17,90 @@ bool ObdReader::setup() {
   return obd_init();
 }
 
-bool ObdReader::send_OBD_cmd(const char* obd_cmd) {
-  String result="";
+char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
+  char result[MAX_RESP_BUFFER];
   char recvChar;
-  boolean prompt;
-  int retries;
+  boolean prompt = false;
+  int retries = 0;
+  unsigned long time = millis();
+  bool spinlock = true;
+  uint8_t respSize;
 
-  prompt = false;
-  retries = 0;
   while((!prompt) && (retries < OBD_CMD_RETRIES)) {                //while no prompt and not reached OBD cmd retries
+    memset(result, 0, MAX_RESP_BUFFER);
+    respSize = 0;
     Serial.print("Sending command ");
     Serial.println(obd_cmd);
     serial->print(obd_cmd);                             //send OBD cmd
     serial->print("\r");                                //send cariage return
 
-    while (serial->available() <= 0);                   //wait while no data from ELM
+    while(spinlock){
+      if(millis() > (time + 4000)){
+        break;
+      }
+      else if(serial->available()){
+        spinlock = false;
+      }
+    }
+    // if serial port still not available
+    // skip next instructions and make another cmd send attempt
+    if(spinlock) {
+      Serial.print("Port is not available. Send command again!");
+      retries++;                                          //increase retries
+      delay(1000);
+      continue;
+    }
 
-    while ((serial->available()>0) && (!prompt)){       //while there is data and not prompt
+    Serial.println("Spinlock ok");
+    while (serial->available() && (!prompt)) {       //while there is data and not prompt
       recvChar = serial->read();                        //read from elm
-      result += recvChar;
       if (recvChar == 62) {
         prompt = true;                            //if received char is '>' then prompt is true
       }
+      // 13 correspond to '\r'
+      else if(recvChar != 13) result[respSize++] = recvChar;
     }
     if(!prompt) {
+      Serial.print("Get no prompt! Try again.");
       retries++;                                          //increase retries
-      delay(2000);
+      delay(1000);
     }
+    Serial.print("Response: ");
+    Serial.println(result);
+
   }
-  Serial.print("Response: ");
-  Serial.println(result);
-  return prompt;
+  if(retries == OBD_CMD_RETRIES) {
+    Serial.print("Reached max attempt. Abort!");
+    return NULL;
+  } else {
+    Serial.print("Response: ");
+    Serial.println(result);
+    printHex(result, respSize);
+    return result;
+  }
+}
+
+void printHex(const char* str, uint8_t size) {
+  char hexStr[4] = {'\0'};
+  for(int i = 0; i < size; i++) {
+    sprintf(hexStr, "%x ", str[i]);
+    Serial.print(hexStr);
+  }
+  Serial.println(" END");
 }
 
 bool ObdReader::obd_init() {
-  bool res = false;
+  String res = "";
 
-  res = send_OBD_cmd("ATZ");      //send to OBD ATZ, reset
-  if(!res) return res;
-  delay(1000);
+  if(send_OBD_cmd("ATZ") == NULL) return false;      //send to OBD ATZ, reset
+  delay(100);
 
-  res = send_OBD_cmd("ATE0");      //send to OBD ATE0, echo off
-  if(!res) return res;
+  if(send_OBD_cmd("ATE0") == NULL) return false;      //send to OBD ATE0, echo off
+  delay(5000);
+
+  if((res = send_OBD_cmd("ATRV")) == NULL) return false;      //read voltage to check if OBD is connected to car
   delay(1000);
+  return true;
 
   res = send_OBD_cmd("ATSP0");    //send ATSP0, protocol auto
   if(!res) return res;

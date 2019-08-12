@@ -3,6 +3,7 @@
 
 #define BAUDRATE 38400
 #define OBD_CMD_RETRIES 5
+#define MAX_RESP_BUFFER 50
 
 #include <inttypes.h>
 #include <SoftwareSerial.h>
@@ -22,7 +23,7 @@ class ObdReader{
     mode_t mode;
     SoftwareSerial *serial;
     obd_reader_conf_t config;
-    bool send_OBD_cmd(const char* obd_cmd);
+    char* send_OBD_cmd(const char* obd_cmd);
     bool obd_init();
 };
 #endif

@@ -43,10 +43,10 @@ void drawMajorTickLabels(void);
 void drawIndicatorHand(long);
 void drawRpm(long);
 void drawCoolantTemp(int);
+void displayInfo(const char*);
 
 
 Adafruit_SSD1306 disp(4);
-SoftwareSerial serial(8, 9);
 ObdReader elm({
   .rxPin = 8,
   .txPin = 9
@@ -55,9 +55,15 @@ ObdReader elm({
 void setup() {
   Serial.begin(9600);
   disp.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  elm.setup();
   disp.clearDisplay();
+  disp.setCursor(0, 0);
+  disp.setTextSize(TEXT_SIZE_LARGE);
+  disp.setTextColor(WHITE);
+  displayInfo("Setting up");
+  elm.setup();
+  displayInfo("Setup done");
   Serial.println("Setup done");
+  delay(1000);
 }
 
 void loop() {
@@ -74,6 +80,15 @@ void loop() {
   // for(int i = 0;;i++) {
   //   delay(50);
   // }
+}
+
+void displayInfo(const char* text) {
+  disp.clearDisplay();
+  disp.setCursor(0, OLED_HEIGHT/2);
+  disp.setTextSize(TEXT_SIZE_LARGE);
+  disp.setTextColor(WHITE);
+  disp.print(text);
+  disp.display();
 }
 
 void drawRpm(long rpm) {

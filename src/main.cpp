@@ -68,7 +68,9 @@ void setup() {
   disp.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   // F() is an helper used to store string into flash instead of RAM
   displayInfo(F("Setting up"));
+  elm.enable_debug(true);
   initialized = elm.setup();
+  elm.enable_debug(false);
   if(initialized == false) {
     displayInfo(F("Init KO"));
     delay(2000);
@@ -80,8 +82,7 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(F("Main loop"));
-  delay(80);
+  delay(50);
   rpm = elm.getRpm();
   if(rpm != 0) {
     disp.clearDisplay();

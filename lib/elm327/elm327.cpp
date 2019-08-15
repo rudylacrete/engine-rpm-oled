@@ -20,7 +20,23 @@ bool ObdReader::setup() {
   return obd_init();
 }
 
-char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
+void ObdReader::enable_debug(bool enabled) {
+  debug_mode = enabled;
+}
+
+void ObdReader::debug(const char* message, bool new_line = true) {
+  if(debug_mode) {
+    new_line ? Serial.println(message) : Serial.print(message);
+  }
+}
+
+void ObdReader::debug(const __FlashStringHelper* message, bool new_line = true) {
+  if(debug_mode) {
+    new_line ? Serial.println(message) : Serial.print(message);
+  }
+}
+
+char* ObdReader::send_OBD_cmd(const char* obd_cmd, bool waitPrompt = true) {
   char recvChar;
   boolean prompt = false;
   int retries = 0;
@@ -30,8 +46,8 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
   while((!prompt) && (retries < OBD_CMD_RETRIES)) {                //while no prompt and not reached OBD cmd retries
     memset(resBuf, 0, MAX_RESP_BUFFER);
     resLength = 0;
-    Serial.print(F("Sending command "));
-    Serial.println(obd_cmd);
+    debug(F("Sending command "), false);
+    debug(obd_cmd);
     serial->print(obd_cmd);                             //send OBD cmd
     serial->print("\r");                                //send cariage return
 
@@ -52,7 +68,6 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
       continue;
     }
 
-    Serial.println(F("Spinlock ok"));
     while ((serial->available()>0) && (!prompt)) {       //while there is data and not prompt
       recvChar = serial->read();                        //read from elm
       if (recvChar == 62) {
@@ -60,6 +75,10 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
       }
       // 13 correspond to '\r', 32 to ' '
       else if(recvChar != 13 && recvChar != 32) resBuf[resLength++] = recvChar;
+    }
+    // exit the loop if we are not waiting for prompt
+    if(!waitPrompt) {
+      break;
     }
     if(!prompt) {
       Serial.print(F("Get no prompt! Try again."));
@@ -71,20 +90,22 @@ char* ObdReader::send_OBD_cmd(const char* obd_cmd) {
     Serial.print(F("Reached max attempt. Abort!"));
     return NULL;
   } else {
-    Serial.print(F("Response: "));
-    Serial.println(resBuf);
+    debug(F("Response: "), false);
+    debug(resBuf);
     printHex(resBuf, resLength);
     return resBuf;
   }
 }
 
-void printHex(const char* str, uint8_t size) {
-  char hexStr[4] = {'\0'};
-  for(int i = 0; i < size; i++) {
-    sprintf(hexStr, "%x ", str[i]);
-    Serial.print(hexStr);
+void ObdReader::printHex(const char* str, uint8_t size) {
+  if(debug_mode) {
+    char hexStr[4] = {'\0'};
+    for(int i = 0; i < size; i++) {
+      sprintf(hexStr, "%x ", str[i]);
+      Serial.print(hexStr);
+    }
+    Serial.println(F(" END"));
   }
-  Serial.println(F(" END"));
 }
 
 void ObdReader::replaceStrChar(char currentChr, char newChr) {
@@ -112,7 +133,6 @@ bool ObdReader::obd_init() {
     return false;
   }
   delay(1000);
-  return true;
 
   send_OBD_cmd("ATSP0");    //send ATSP0, protocol auto
   delay(1000);
@@ -133,7 +153,7 @@ int ObdReader::getRpm() {
   boolean valid = false;
   int rpm = 0;
 
-  send_OBD_cmd("010C1");
+  send_OBD_cmd("010C1", false);
 
   valid = ((resBuf[0] == '4') && (resBuf[1] == '1') && (resBuf[2] == '0') && (resBuf[3] == 'C')); //if first four chars after our command is 410C
   if (valid){                                                                    //in case of correct RPM response

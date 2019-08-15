@@ -32,13 +32,13 @@ class ObdReader{
     int getEngineCoolantTemp();
     void enable_debug(bool enabled);
   private:
+    obd_reader_conf_t config;
     bool debug_mode;
-    void debug(const char* message, bool new_line = true);
-    void debug(const __FlashStringHelper* message, bool new_line = true);
+    void debug(const char* message, bool new_line);
+    void debug(const __FlashStringHelper* message, bool new_line);
     void printHex(const char* str, uint8_t size);
     SoftwareSerial *serial;
-    obd_reader_conf_t config;
-    char* send_OBD_cmd(const char* obd_cmd, bool waitPrompt = true);
+    char* send_OBD_cmd(const char* obd_cmd, bool waitPrompt);
     error_code_t obd_init();
     void replaceStrChar(char currentChr, char newChr);
 };

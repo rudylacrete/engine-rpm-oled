@@ -171,3 +171,24 @@ int ObdReader::getRpm() {
   }
   return rpm;
 }
+
+int ObdReader::getEngineCoolantTemp() {
+  boolean valid = false;
+  int temp = 0;
+
+  send_OBD_cmd("01051", false);
+
+  valid = ((resBuf[0] == '4') && (resBuf[1] == '1') && (resBuf[2] == '0') && (resBuf[3] == '5'));
+  if (valid){                                                                    //in case of correct RPM response
+    char hexByte[2];
+    int A;
+    //start calculation of real RPM value
+    //RPM is coming from OBD in two 8bit(bytes) hex numbers for example A=0B and B=6C
+    //the equation is ((A * 256) + B) / 4, so 0B=11 and 6C=108
+    //so rpm=((11 * 256) + 108) / 4 = 731 a normal idle car engine rpm
+    memcpy(hexByte, resBuf + 4, 2);
+    A = strtol(hexByte, NULL, 16);
+    temp = A - 40;
+  }
+  return temp;
+}

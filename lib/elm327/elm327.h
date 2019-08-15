@@ -21,6 +21,7 @@ class ObdReader{
     uint8_t resLength;
     bool setup();
     int getRpm();
+    int getEngineCoolantTemp();
     void enable_debug(bool enabled);
   private:
     bool debug_mode;

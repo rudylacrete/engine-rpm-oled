@@ -54,7 +54,7 @@ void drawRpm(int);
 void drawCoolantTemp(int);
 void displayInfo(const __FlashStringHelper*);
 
-static bool initialized = false;
+static error_code_t error;
 
 Adafruit_SSD1306 disp(4);
 ObdReader elm({
@@ -69,16 +69,62 @@ void setup() {
   // F() is an helper used to store string into flash instead of RAM
   displayInfo(F("Setting up"));
   elm.enable_debug(true);
-  initialized = elm.setup();
+  error = elm.setup();
   elm.enable_debug(false);
-  if(initialized == false) {
-    displayInfo(F("Init KO"));
-    delay(2000);
-    exit(1);
+  switch (error)
+  {
+    case RESET_ERROR:
+      displayInfo(F("Reset failed"));
+      exit(1);
+      break;
+
+    case ECHO_OFF_ERROR:
+      displayInfo(F("Echo off error"));
+      exit(1);
+      break;
+
+    case GET_VOLTAGE_ERROR:
+      displayInfo(F("Voltage error"));
+      exit(1);
+      break;
+
+    case OBD_NOT_CONNECTED:
+      displayInfo(F("OBD not con"));
+      exit(1);
+      break;
+
+    case SELECT_PROTOCOL_ERROR:
+      displayInfo(F("PROTO AUTO err"));
+      exit(1);
+      break;
+
+    case PID00_ERROR:
+      displayInfo(F("PID00 err"));
+      exit(1);
+      break;
+
+    case PID20_ERROR:
+      displayInfo(F("PID20 err"));
+      exit(1);
+      break;
+
+    case PID40_ERROR:
+      displayInfo(F("PID40 err"));
+      exit(1);
+      break;
+
+    case NO_ERROR:
+      displayInfo(F("Setup done"));
+      Serial.println(F("Setup done"));
+      delay(1000);
+      break;
+
+    default:
+      displayInfo(F("UKN error"));
+      Serial.println(F("Unknow error occured"));
+      exit(1);
+      break;
   }
-  displayInfo(F("Setup done"));
-  Serial.println(F("Setup done"));
-  delay(1000);
 }
 
 void loop() {
@@ -87,7 +133,6 @@ void loop() {
   if(rpm != 0) {
     disp.clearDisplay();
     drawRpm(rpm);
-    drawCoolantTemp(110);
     disp.display();
   }
 }

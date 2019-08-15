@@ -7,7 +7,7 @@ http://www.kokoras.com/OBD/Arduino_HC-05_ELM327_OBD_RPM_Shift_Light.htm
 
 void printHex(const char*, uint8_t);
 
-bool ObdReader::setup() {
+error_code_t ObdReader::setup() {
   pinMode(config.rxPin, INPUT);
   pinMode(config.txPin, OUTPUT);
 
@@ -116,37 +116,47 @@ void ObdReader::replaceStrChar(char currentChr, char newChr) {
   }
 }
 
-bool ObdReader::obd_init() {
+error_code_t ObdReader::obd_init() {
   float voltage = 0;
+  bool obdConnected = false;
+  uint8_t nbRetry = 0;
 
-  if(send_OBD_cmd("ATZ") == NULL) return false;      //send to OBD ATZ, reset
+  if(send_OBD_cmd("ATZ") == NULL) return RESET_ERROR;      //send to OBD ATZ, reset
   delay(1000);
 
-  if(send_OBD_cmd("ATE0") == NULL) return false;      //send to OBD ATE0, echo off
+  if(send_OBD_cmd("ATE0") == NULL) return ECHO_OFF_ERROR;      //send to OBD ATE0, echo off
   delay(5000);
 
-  if(send_OBD_cmd("ATRV") == NULL) return false;      //read voltage to check if OBD is connected to car
-  replaceStrChar('V', '\0');
-  voltage = String(resBuf).toFloat();
-  if(voltage < 6) {
-    Serial.println(F("OBDII plug not connected"));
-    return false;
+
+  while(!obdConnected) {
+    if(send_OBD_cmd("ATRV") == NULL) return GET_VOLTAGE_ERROR;      //read voltage to check if OBD is connected to car
+    replaceStrChar('V', '\0');
+    voltage = String(resBuf).toFloat();
+    if(voltage < 6  && nbRetry == OBD_CMD_RETRIES) {
+      Serial.println(F("OBDII plug not connected"));
+      return OBD_NOT_CONNECTED;
+    }
+    else {
+      obdConnected = true;
+    }
+    delay(1000);
+    nbRetry++;
   }
+
+  //send ATSP0, protocol auto
+  if(send_OBD_cmd("ATSP0") == NULL) return SELECT_PROTOCOL_ERROR;
   delay(1000);
 
-  send_OBD_cmd("ATSP0");    //send ATSP0, protocol auto
+  if(send_OBD_cmd("0100") == NULL) return PID00_ERROR;     //send 0100, retrieve available pid's 00-19
   delay(1000);
 
-  send_OBD_cmd("0100");     //send 0100, retrieve available pid's 00-19
+  if(send_OBD_cmd("0120") == NULL) return PID20_ERROR;     //send 0120, retrieve available pid's 20-39
   delay(1000);
 
-  send_OBD_cmd("0120");     //send 0120, retrieve available pid's 20-39
+  if(send_OBD_cmd("0140") == NULL) return PID40_ERROR;     //send 0140, retrieve available pid's 40-??
   delay(1000);
 
-  send_OBD_cmd("0140");     //send 0140, retrieve available pid's 40-??
-  delay(1000);
-
-  return true;
+  return NO_ERROR;
 }
 
 int ObdReader::getRpm() {

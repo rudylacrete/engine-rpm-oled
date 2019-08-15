@@ -10,16 +10,24 @@
 #include <obdReaderConfig.h>
 
 typedef enum {
-  AT = 1,
-  COM
-} mode_t;
+  NO_ERROR = 0,
+  RESET_ERROR,
+  ECHO_OFF_ERROR,
+  GET_VOLTAGE_ERROR,
+  OBD_NOT_CONNECTED,
+  SELECT_PROTOCOL_ERROR,
+  PID00_ERROR,
+  PID20_ERROR,
+  PID40_ERROR,
+  UNKOWN_ERROR
+} error_code_t;
 
 class ObdReader{
   public:
     ObdReader(obd_reader_conf_t config): config(config), debug_mode(false) {};
     char* resBuf;
     uint8_t resLength;
-    bool setup();
+    error_code_t setup();
     int getRpm();
     int getEngineCoolantTemp();
     void enable_debug(bool enabled);
@@ -28,11 +36,10 @@ class ObdReader{
     void debug(const char* message, bool new_line = true);
     void debug(const __FlashStringHelper* message, bool new_line = true);
     void printHex(const char* str, uint8_t size);
-    mode_t mode;
     SoftwareSerial *serial;
     obd_reader_conf_t config;
     char* send_OBD_cmd(const char* obd_cmd, bool waitPrompt = true);
-    bool obd_init();
+    error_code_t obd_init();
     void replaceStrChar(char currentChr, char newChr);
 };
 #endif
